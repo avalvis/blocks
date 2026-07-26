@@ -1,0 +1,33 @@
+# Project Brief & PRD: NEON TETRIS
+
+## 1. Project Overview
+NEON TETRIS is a browser-based arcade puzzle game that blends classic Tetris gameplay with a "Luxury Arcade" aesthetic. The goal is to provide a visually stunning, high-performance experience that feels both retro-nostalgic and modern-premium.
+
+## 2. Visual Identity ("Luxury Arcade")
+- **Color Palette:** Deep retro-wave purple (#1a0b2e) backgrounds with high-contrast neon accents (Electric Cyan, Neon Magenta, Lemon Yellow, Vivid Orange).
+- **Styling:** Glossy, candy-like tetrominoes with subtle glows. Minimalist HUD.
+- **Effects:** Subtle CRT scanlines, pixel-grid overlays, and high-fidelity motion/transitions.
+- **Typography:** Bold, digital-influenced sans-serif (e.g., Anybody) for a "snappy" feel.
+
+## 3. Core Features & Gameplay
+- **Main Game Loop:** Standard 10x20 Tetris grid with gravity-based piece falling.
+- **Controls:** Keyboard-driven (Arrow keys/WASD) for movement and rotation. Hard drop and Ghost piece functionality.
+- **Scoring System:** Progression-based scoring with level scaling and speed increases.
+- **HUD Elements:** Score counter, Level indicator, "Next Piece" preview.
+- **States:** Start Screen, Active Play, Game Over, and Leaderboard.
+
+## 4. User Experience (UX) Goals
+- **Minimalism:** Remove all non-essential UI borders and buttons to keep the focus on the play grid.
+- **Responsiveness:** Fluid animations and zero-latency input handling.
+- **Retention:** Competitive leaderboard and rank system (Master Rank progression).
+
+## 5. Technical Requirements
+- **Platform:** Web-based (Desktop priority, Mobile-optimized).
+- **Tech Stack:** HTML5, Tailwind CSS, Vanilla JavaScript (DOM-based rendering for the grid).
+- **Performance:** 60FPS animation target for piece movement and clearing effects.
+
+## 6. Roadmap & Milestones
+1. **Phase 1: Core Design (Completed):** Established "Luxury Arcade" design system and Play Screen.
+2. **Phase 2: Documentation (Current):** PRD and Project Briefing.
+3. **Phase 3: Extended Screens:** Game Over state, Leaderboard, and Settings.
+4. **Phase 4: Motion & Logic:** Implementation of CSS/JS game loop logic and particle effects.

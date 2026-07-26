@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NEON TETRIS - Minimalism</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Anybody:wght@700;800&amp;family=Geist:wght@600;700&amp;family=Inter:wght@400&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        @import url('https://fonts.googleapis.com/css2?family=Anybody:wght@800&family=Geist:wght@700&display=swap');
+
+        :root {
+            --tetromino-glow: 0 0 15px rgba(255, 255, 255, 0.3);
+        }
+
+        body {
+            background-color: #131313;
+            overflow: hidden;
+            margin: 0;
+            cursor: crosshair;
+        }
+
+        /* CRT Scanline Effect */
+        .crt-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 3px, 3px 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        /* Pixel Grid Overlay */
+        .pixel-grid {
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            background-size: 30px 30px;
+        }
+
+        /* Tetromino Plastic Shine */
+        .tetromino-block {
+            position: relative;
+            box-shadow: inset 2px 2px 0px rgba(255, 255, 255, 0.4), 
+                        inset -2px -2px 0px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Animated Bloom */
+        @keyframes bloom {
+            0% { filter: brightness(1) drop-shadow(0 0 0px var(--glow-color)); }
+            50% { filter: brightness(1.5) drop-shadow(0 0 10px var(--glow-color)); }
+            100% { filter: brightness(1) drop-shadow(0 0 0px var(--glow-color)); }
+        }
+        .active-bloom {
+            animation: bloom 2s infinite ease-in-out;
+        }
+
+        .bg-retro-gradient {
+            background: radial-gradient(circle at center, #2e1065 0%, #131313 100%);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "tertiary": "#00dddd",
+                        "secondary": "#ffabf3",
+                        "surface": "#131313",
+                        "surface-container-lowest": "#0e0e0e",
+                        "outline-variant": "#4a454d",
+                    },
+                    spacing: {
+                        "container-padding": "40px",
+                        "grid-gutter": "24px",
+                        "unit": "4px",
+                        "block-gap": "2px"
+                    },
+                    fontFamily: {
+                        "display-lg": ["Anybody"],
+                        "score-value": ["Geist"],
+                        "label-caps": ["Geist"],
+                        "headline-md": ["Anybody"]
+                    },
+                    fontSize: {
+                        "display-lg": ["72px", { lineHeight: "1.1", letterSpacing: "-0.04em", fontWeight: "800" }],
+                        "score-value": ["48px", { lineHeight: "1", letterSpacing: "-0.02em", fontWeight: "700" }],
+                        "label-caps": ["12px", { lineHeight: "1", letterSpacing: "0.2em", fontWeight: "600" }],
+                        "headline-md": ["32px", { lineHeight: "1.2", letterSpacing: "0.05em", fontWeight: "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-retro-gradient min-h-screen flex items-center justify-center p-container-padding">
+<!-- CRT Visual Layer -->
+<div class="crt-overlay"></div>
+<!-- Header / Brand Shell -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-container-padding py-grid-gutter pointer-events-none">
+<h1 class="font-display-lg text-display-lg-mobile md:text-display-lg tracking-tighter text-tertiary drop-shadow-[0_0_8px_rgba(0,221,221,0.8)]">
+            NEON TETRIS
+        </h1>
+<div class="flex gap-4 pointer-events-auto">
+<button class="material-symbols-outlined text-tertiary hover:text-secondary transition-all active:scale-95">pause_circle</button>
+<button class="material-symbols-outlined text-tertiary hover:text-secondary transition-all active:scale-95">settings</button>
+</div>
+</header>
+<!-- Main Game Canvas Area -->
+<main class="relative flex flex-col md:flex-row items-center gap-10 z-10">
+<!-- Game Board -->
+<div class="relative group">
+<!-- Board Border Glow -->
+<div class="absolute -inset-1 bg-gradient-to-r from-tertiary via-secondary to-tertiary rounded-lg blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+<div class="relative w-[300px] h-[600px] bg-surface-container-lowest border-2 border-outline-variant/30 flex flex-wrap content-start pixel-grid overflow-hidden">
+<!-- Mock Tetrominoes -->
+<!-- L-Shape (Magenta) -->
+<div class="absolute top-[480px] left-[60px] flex flex-wrap w-[60px]">
+<div class="w-[30px] h-[30px] bg-secondary tetromino-block" style="--glow-color: #ffabf3"></div>
+<div class="w-[30px] h-[30px] bg-secondary tetromino-block" style="--glow-color: #ffabf3"></div>
+<div class="w-[30px] h-[30px] bg-secondary tetromino-block" style="--glow-color: #ffabf3"></div>
+<div class="w-[30px] h-[30px] bg-secondary tetromino-block translate-x-[30px] -translate-y-[30px]" style="--glow-color: #ffabf3"></div>
+</div>
+<!-- I-Shape (Cyan) -->
+<div class="absolute top-[540px] left-[150px] flex w-[120px]">
+<div class="w-[30px] h-[30px] bg-tertiary tetromino-block" style="--glow-color: #00dddd"></div>
+<div class="w-[30px] h-[30px] bg-tertiary tetromino-block" style="--glow-color: #00dddd"></div>
+<div class="w-[30px] h-[30px] bg-tertiary tetromino-block" style="--glow-color: #00dddd"></div>
+<div class="w-[30px] h-[30px] bg-tertiary tetromino-block" style="--glow-color: #00dddd"></div>
+</div>
+<!-- O-Shape (Yellow) -->
+<div class="absolute top-[540px] left-[0px] flex flex-wrap w-[60px]">
+<div class="w-[30px] h-[30px] bg-yellow-400 tetromino-block" style="--glow-color: #facc15"></div>
+<div class="w-[30px] h-[30px] bg-yellow-400 tetromino-block" style="--glow-color: #facc15"></div>
+<div class="w-[30px] h-[30px] bg-yellow-400 tetromino-block" style="--glow-color: #facc15"></div>
+<div class="w-[30px] h-[30px] bg-yellow-400 tetromino-block" style="--glow-color: #facc15"></div>
+</div>
+<!-- Active Falling Piece (Z-Shape Orange) -->
+<div class="absolute top-[120px] left-[120px] flex flex-wrap w-[90px] active-bloom" id="active-piece" style="--glow-color: #fb923c">
+<div class="w-[30px] h-[30px] bg-orange-400 tetromino-block"></div>
+<div class="w-[30px] h-[30px] bg-orange-400 tetromino-block"></div>
+<div class="w-[30px] h-[30px] bg-orange-400 tetromino-block translate-x-[30px]"></div>
+<div class="w-[30px] h-[30px] bg-orange-400 tetromino-block translate-x-[30px]"></div>
+</div>
+</div>
+</div>
+<!-- HUD Side Panel -->
+<aside class="flex flex-col gap-8 w-48">
+<!-- Score Module -->
+<section class="flex flex-col gap-2">
+<h3 class="font-label-caps text-label-caps text-outline-variant uppercase tracking-widest">Score</h3>
+<div class="font-score-value text-score-value text-tertiary drop-shadow-[0_0_10px_rgba(0,221,221,0.5)]">
+                    042,850
+                </div>
+</section>
+<!-- Level Module -->
+<section class="flex flex-col gap-2">
+<h3 class="font-label-caps text-label-caps text-outline-variant uppercase tracking-widest">Level</h3>
+<div class="flex items-end gap-2">
+<span class="font-score-value text-headline-md text-on-surface">12</span>
+<!-- Segmented Progress Bar -->
+<div class="flex gap-1 mb-2">
+<div class="w-1 h-3 bg-tertiary shadow-[0_0_5px_rgba(0,221,221,0.8)]"></div>
+<div class="w-1 h-3 bg-tertiary shadow-[0_0_5px_rgba(0,221,221,0.8)]"></div>
+<div class="w-1 h-3 bg-tertiary shadow-[0_0_5px_rgba(0,221,221,0.8)]"></div>
+<div class="w-1 h-3 bg-tertiary/20"></div>
+<div class="w-1 h-3 bg-tertiary/20"></div>
+<div class="w-1 h-3 bg-tertiary/20"></div>
+</div>
+</div>
+</section>
+<!-- Next Piece Module -->
+<section class="bg-surface-container-lowest/40 backdrop-blur-md p-6 rounded-xl border border-outline-variant/20">
+<h3 class="font-label-caps text-label-caps text-outline-variant uppercase tracking-widest mb-4">Next</h3>
+<div class="w-full aspect-square flex items-center justify-center">
+<!-- Preview Piece (T-Shape Cyan) -->
+<div class="grid grid-cols-3 gap-0">
+<div class="w-6 h-6"></div>
+<div class="w-6 h-6 bg-tertiary tetromino-block"></div>
+<div class="w-6 h-6"></div>
+<div class="w-6 h-6 bg-tertiary tetromino-block"></div>
+<div class="w-6 h-6 bg-tertiary tetromino-block"></div>
+<div class="w-6 h-6 bg-tertiary tetromino-block"></div>
+</div>
+</div>
+</section>
+<!-- Status Badges -->
+<div class="flex flex-wrap gap-2 mt-4">
+<span class="px-3 py-1 rounded-full bg-secondary/10 border border-secondary/30 text-[10px] font-label-caps text-secondary uppercase tracking-tighter">Hard Drop Active</span>
+<span class="px-3 py-1 rounded-full bg-tertiary/10 border border-tertiary/30 text-[10px] font-label-caps text-tertiary uppercase tracking-tighter">Ghost Piece ON</span>
+</div>
+</aside>
+</main>
+<!-- Side Navigation Shell (from JSON) -->
+<nav class="fixed left-0 top-0 h-full z-40 hidden lg:flex flex-col items-center py-10 gap-block-gap bg-surface-container-lowest/80 backdrop-blur-xl border-r border-outline-variant/20 w-20">
+<div class="flex flex-col items-center gap-1 mb-10">
+<span class="font-label-caps text-[10px] text-outline text-center leading-tight">PLAYER_01</span>
+<span class="font-label-caps text-[8px] text-tertiary text-center leading-tight">MASTER</span>
+</div>
+<div class="flex flex-col gap-8 flex-1 justify-center">
+<div class="group flex flex-col items-center gap-1 cursor-pointer transition-all duration-300 text-secondary drop-shadow-[0_0_10px_rgba(255,0,255,0.7)]">
+<span class="material-symbols-outlined text-[24px]">videogame_asset</span>
+<span class="font-label-caps text-[10px]">Play</span>
+</div>
+<div class="group flex flex-col items-center gap-1 cursor-pointer transition-all duration-200 text-outline hover:text-tertiary">
+<span class="material-symbols-outlined text-[24px]">leaderboard</span>
+<span class="font-label-caps text-[10px]">Stats</span>
+</div>
+<div class="group flex flex-col items-center gap-1 cursor-pointer transition-all duration-200 text-outline hover:text-tertiary">
+<span class="material-symbols-outlined text-[24px]">keyboard</span>
+<span class="font-label-caps text-[10px]">Keys</span>
+</div>
+<div class="group flex flex-col items-center gap-1 cursor-pointer transition-all duration-200 text-outline hover:text-tertiary">
+<span class="material-symbols-outlined text-[24px]">shopping_bag</span>
+<span class="font-label-caps text-[10px]">Store</span>
+</div>
+</div>
+</nav>
+<!-- Background Decoration: Subtle WebGL/Shader Placeholder would go here if defined -->
+<div class="fixed inset-0 z-0 opacity-20 pointer-events-none">
+<!-- Minimalistic atmospheric glow nodes -->
+<div class="absolute top-1/4 left-1/4 w-96 h-96 bg-tertiary rounded-full blur-[160px]"></div>
+<div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary rounded-full blur-[160px]"></div>
+</div>
+<script>
+        // Subtle micro-interaction for the falling piece
+        const activePiece = document.getElementById('active-piece');
+        let posY = 120;
+        
+        function gameLoop() {
+            posY += 0.5;
+            if (posY > 400) posY = 120;
+            activePiece.style.top = posY + 'px';
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Start "game" loop
+        requestAnimationFrame(gameLoop);
+
+        // Keyboard interaction simulation
+        window.addEventListener('keydown', (e) => {
+            if(e.key === 'ArrowLeft') {
+                const currentLeft = parseInt(activePiece.style.left || 120);
+                activePiece.style.left = (currentLeft - 30) + 'px';
+            }
+            if(e.key === 'ArrowRight') {
+                const currentLeft = parseInt(activePiece.style.left || 120);
+                activePiece.style.left = (currentLeft + 30) + 'px';
+            }
+        });
+    </script>
+</body></html>
