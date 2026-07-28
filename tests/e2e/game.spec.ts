@@ -3,11 +3,11 @@ import { expect, test } from '@playwright/test';
 test('starts, accepts keyboard input, pauses, and restarts', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveTitle('blocks');
-  await expect(page.getByRole('heading', { name: /make space/i })).toBeVisible();
+  await expect(page.getByRole('img', { name: /animated falling blocks/i })).toBeVisible();
   await expect(page.locator('canvas')).toBeInViewport();
   await expect(page.locator('.next-list .preview-grid')).toHaveCount(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.getByRole('button', { name: /start game/i }).click();
+  await page.getByRole('button', { name: /^play$/i }).click();
   await expect(page.locator('canvas')).toBeVisible();
 
   await page.keyboard.press('Space');
@@ -24,7 +24,7 @@ test('supports smart mouse aiming, dropping, holding, and persistence', async ({
   await page.goto('/');
   await page.getByRole('button', { name: 'Mouse', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Mouse', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: /start game/i }).click();
+  await page.getByRole('button', { name: /^play$/i }).click();
 
   const board = page.locator('canvas');
   const bounds = await board.boundingBox();
@@ -66,7 +66,7 @@ test('shows usable touch controls on a mobile viewport', async ({ page }, testIn
   expect(touchSize?.width).toBeGreaterThanOrEqual(44);
   expect(touchSize?.height).toBeGreaterThanOrEqual(44);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.getByRole('button', { name: /start game/i }).click();
+  await page.getByRole('button', { name: /^play$/i }).click();
   await page.getByRole('button', { name: 'Hard drop' }).click();
   await expect(page.locator('canvas')).toBeInViewport();
 });

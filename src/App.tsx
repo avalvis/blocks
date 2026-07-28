@@ -130,20 +130,43 @@ function ControlModeSwitch({
 }
 
 function IntroGraphic() {
+  const stackCells = [
+    { x: 0, y: 7, color: 'cyan' },
+    { x: 1, y: 7, color: 'violet' },
+    { x: 2, y: 7, color: 'pink' },
+    { x: 4, y: 7, color: 'cyan' },
+    { x: 5, y: 7, color: 'violet' },
+    { x: 0, y: 6, color: 'cyan' },
+    { x: 1, y: 6, color: 'violet' },
+    { x: 4, y: 6, color: 'pink' },
+    { x: 5, y: 6, color: 'pink' },
+    { x: 1, y: 5, color: 'violet' },
+    { x: 4, y: 5, color: 'pink' },
+    { x: 0, y: 4, color: 'cyan' },
+  ];
+
   return (
-    <div className="intro-graphic" aria-hidden="true">
-      <span className="graphic-pixel pixel-one" />
-      <span className="graphic-pixel pixel-two" />
-      <div className="falling-mark"><i /><i /><i /><i /></div>
-      <div className="stack-line">
-        <span className="stack-cyan" />
-        <span className="stack-violet" />
-        <span className="stack-violet" />
-        <span className="stack-pink" />
-        <span className="stack-pink" />
-        <span className="stack-pink" />
+    <div className="intro-graphic" role="img" aria-label="Animated falling blocks">
+      <div className="arcade-grid">
+        <span className="grid-glow" />
+        <span className="drop-trail trail-one" />
+        <span className="drop-trail trail-two" />
+        {stackCells.map((cell, index) => (
+          <span
+            className={`stack-cell stack-${cell.color}${cell.y === 7 ? ' clear-cell' : ''}`}
+            key={`${cell.x}-${cell.y}-${index}`}
+            style={{
+              left: 11 + cell.x * 22,
+              top: 14 + cell.y * 22,
+            }}
+          />
+        ))}
+        <div className="falling-piece" aria-hidden="true">
+          <i /><i /><i /><i />
+        </div>
+        <span className="line-flash" />
+        <span className="impact-ring" />
       </div>
-      <span className="scan-line" />
     </div>
   );
 }
@@ -538,19 +561,11 @@ export function App() {
             )}
             {game.status === 'ready' && (
               <div className="game-overlay intro-overlay">
-                <span className="eyebrow">Blocks / 01</span>
                 <IntroGraphic />
-                <h1>Make<br /><em>space.</em></h1>
-                <p>Seven pieces. One board. No excuses.</p>
-                <button className="primary-button" type="button" onClick={startGame}>
-                  Start game <span>→</span>
+                <button className="primary-button play-button" type="button" onClick={startGame}>
+                  <span className="play-icon" aria-hidden="true">▶</span>
+                  Play
                 </button>
-                <span className="overlay-note desktop-overlay-note">
-                  {stored.preferences.inputMode === 'mouse'
-                    ? 'Aim · left click drops · right click holds'
-                    : 'Arrows move · space drops'}
-                </span>
-                <span className="overlay-note mobile-overlay-note">Full controls below the board</span>
               </div>
             )}
             {showPause && (
@@ -630,7 +645,6 @@ export function App() {
       </main>
 
       <footer className="footer">
-        <span>Seven pieces. One board. No excuses.</span>
         <span>v1.0</span>
       </footer>
 
