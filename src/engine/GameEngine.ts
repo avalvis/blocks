@@ -18,6 +18,13 @@ import {
 } from './types';
 
 const PIECE_TYPES: Tetromino[] = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
+const POINTER_CELL_INSET = 0.16;
+
+interface MouseTargetCell {
+  x: number;
+  y: number;
+  type: Tetromino;
+}
 
 function emptyBoard(): Board {
   return Array.from({ length: BOARD_HEIGHT }, () => Array.from({ length: BOARD_WIDTH }, () => null));
@@ -57,6 +64,7 @@ export class GameEngine implements GameEngineApi {
   private lastMoveWasRotation = false;
   private pendingTSpin = false;
   private pausedFrom: GameStatus = 'playing';
+  private mouseTargetCell: MouseTargetCell | null = null;
 
   constructor(options: EngineOptions = {}) {
     this.random = options.random ?? Math.random;
@@ -79,6 +87,7 @@ export class GameEngine implements GameEngineApi {
     this.lockResets = 0;
     this.lastMoveWasRotation = false;
     this.pendingTSpin = false;
+    this.mouseTargetCell = null;
     this.fillQueue();
     this.state.status = 'playing';
     this.spawnNextPiece();
@@ -125,6 +134,7 @@ export class GameEngine implements GameEngineApi {
     }
     if (this.state.status !== 'playing' || !this.state.active) return;
     this.state.aimTarget = null;
+    this.mouseTargetCell = null;
 
     let changed = false;
     switch (action) {
@@ -164,76 +174,77 @@ export class GameEngine implements GameEngineApi {
     const active = this.state.active;
     if (this.state.status !== 'playing' || !active) return;
 
-    const targetX = Math.max(0, Math.min(BOARD_WIDTH - 1, boardX));
-    const targetY = Math.max(HIDDEN_ROWS, Math.min(BOARD_HEIGHT - 1, boardY));
+    const previousCell = this.mouseTargetCell?.type === active.type
+      ? this.mouseTargetCell
+      : null;
+    const targetX = this.trackPointerCell(boardX, previousCell?.x ?? null, 0, BOARD_WIDTH - 1);
+    const targetY = this.trackPointerCell(
+      boardY,
+      previousCell?.y ?? null,
+      HIDDEN_ROWS,
+      BOARD_HEIGHT - 1,
+    );
+    if (
+      previousCell
+      && previousCell.x === targetX
+      && previousCell.y === targetY
+      && this.state.aimTarget
+    ) return;
+
+    this.mouseTargetCell = { x: targetX, y: targetY, type: active.type };
+    const placements = this.getGroundedPlacements(active.type);
+    if (placements.length === 0) return;
+
+    const coversCell = placements.filter((piece) => getCells(piece.type, piece.rotation).some(
+      (cell) => piece.x + cell.x === targetX && piece.y + cell.y === targetY,
+    ));
+    const coversColumn = placements.filter((piece) => getCells(piece.type, piece.rotation).some(
+      (cell) => piece.x + cell.x === targetX,
+    ));
+    const candidates = coversCell.length > 0
+      ? coversCell
+      : coversColumn.length > 0
+        ? coversColumn
+        : placements;
     const previousTarget = this.state.aimTarget;
-    const reference = previousTarget ?? active;
-    let best: { piece: ActivePiece; score: number } | null = null;
-    let stable: { piece: ActivePiece; score: number } | null = null;
-
-    for (let rotationIndex = 0; rotationIndex < 4; rotationIndex += 1) {
-      const rotation = rotationIndex as Rotation;
-      const cells = getCells(active.type, rotation);
-      const minX = Math.min(...cells.map((cell) => cell.x));
-      const maxX = Math.max(...cells.map((cell) => cell.x));
-
-      for (let x = -minX; x < BOARD_WIDTH - maxX; x += 1) {
-        for (let y = 0; y < BOARD_HEIGHT; y += 1) {
-          const candidate: ActivePiece = { type: active.type, rotation, x, y };
-          if (this.collides(candidate) || !this.isGrounded(candidate)) continue;
-
-          const landingCells = cells.map((cell) => ({
-            x: x + cell.x,
-            y: y + cell.y,
-          }));
-          const pointerDistance = Math.min(...landingCells.map((cell) => (
-            Math.pow(cell.x - targetX, 2) + Math.pow((cell.y - targetY) * 0.68, 2)
-          )));
-          const horizontalCenter = landingCells.reduce((sum, cell) => sum + cell.x, 0)
-            / landingCells.length;
-          const horizontalDistance = Math.abs(horizontalCenter - targetX);
-          const rotationDistance = Math.min(
-            Math.abs(rotation - reference.rotation),
-            4 - Math.abs(rotation - reference.rotation),
-          );
-          const movementDistance = Math.abs(x - reference.x);
-          const score = pointerDistance * 36
-            + horizontalDistance * 4
-            + rotationDistance * 2.6
-            + movementDistance * 0.12;
-          const result = { piece: candidate, score };
-
-          if (
-            previousTarget
-            && previousTarget.x === x
-            && previousTarget.y === y
-            && previousTarget.rotation === rotation
-          ) stable = result;
-          if (!best || score < best.score) best = result;
-        }
+    let best = candidates[0];
+    let bestScore = this.evaluateMousePlacement(
+      best,
+      targetX,
+      targetY,
+      active,
+      previousTarget,
+    );
+    for (let index = 1; index < candidates.length; index += 1) {
+      const candidate = candidates[index];
+      const score = this.evaluateMousePlacement(
+        candidate,
+        targetX,
+        targetY,
+        active,
+        previousTarget,
+      );
+      if (score < bestScore) {
+        best = candidate;
+        bestScore = score;
       }
     }
 
-    if (!best) return;
-    if (stable && stable.score <= best.score + 9) best = stable;
-
-    const targetChanged = !previousTarget
-      || best.piece.x !== previousTarget.x
-      || best.piece.y !== previousTarget.y
-      || best.piece.rotation !== previousTarget.rotation;
-    const preview = { ...active, x: best.piece.x, rotation: best.piece.rotation };
-    const canPreview = !this.collides(preview);
-    const activeChanged = canPreview
-      && (preview.x !== active.x || preview.rotation !== active.rotation);
-    const changed = targetChanged || activeChanged;
-    if (!changed) return;
-
-    this.state.aimTarget = best.piece;
-    if (activeChanged) {
+    this.state.aimTarget = best;
+    let previewY = active.y;
+    let preview = { ...active, x: best.x, y: previewY, rotation: best.rotation };
+    while (previewY <= best.y && this.collides(preview)) {
+      previewY += 1;
+      preview = { ...preview, y: previewY };
+    }
+    if (previewY <= best.y && !this.collides(preview)) {
+      const activeChanged = preview.x !== active.x
+        || preview.y !== active.y
+        || preview.rotation !== active.rotation;
       this.state.active = preview;
       this.lastMoveWasRotation = preview.rotation !== active.rotation;
       this.updateGhost();
-      this.resetGroundLock();
+      if (activeChanged) this.resetGroundLock();
     }
     this.emit();
   }
@@ -314,6 +325,128 @@ export class GameEngine implements GameEngineApi {
       }
       this.state.queue.push(...bag);
     }
+  }
+
+  private trackPointerCell(
+    value: number,
+    previous: number | null,
+    min: number,
+    max: number,
+  ): number {
+    const clamped = Math.max(min, Math.min(max + 0.999, value));
+    const next = Math.max(min, Math.min(max, Math.floor(clamped)));
+    if (previous === null || Math.abs(next - previous) !== 1) return next;
+    if (next > previous && clamped < next + POINTER_CELL_INSET) return previous;
+    if (next < previous && clamped > previous - POINTER_CELL_INSET) return previous;
+    return next;
+  }
+
+  private getGroundedPlacements(type: Tetromino): ActivePiece[] {
+    const placements: ActivePiece[] = [];
+    const seen = new Set<string>();
+    for (let rotationIndex = 0; rotationIndex < 4; rotationIndex += 1) {
+      const rotation = rotationIndex as Rotation;
+      const cells = getCells(type, rotation);
+      const minX = Math.min(...cells.map((cell) => cell.x));
+      const maxX = Math.max(...cells.map((cell) => cell.x));
+      for (let x = -minX; x < BOARD_WIDTH - maxX; x += 1) {
+        for (let y = 0; y < BOARD_HEIGHT; y += 1) {
+          const piece: ActivePiece = { type, rotation, x, y };
+          if (this.collides(piece) || !this.isGrounded(piece)) continue;
+          const key = getCells(type, rotation)
+            .map((cell) => `${x + cell.x}:${y + cell.y}`)
+            .sort()
+            .join('|');
+          if (seen.has(key)) continue;
+          seen.add(key);
+          placements.push(piece);
+        }
+      }
+    }
+    return placements;
+  }
+
+  private evaluateMousePlacement(
+    piece: ActivePiece,
+    targetX: number,
+    targetY: number,
+    active: ActivePiece,
+    previousTarget: ActivePiece | null,
+  ): number {
+    const cells = getCells(piece.type, piece.rotation).map((cell) => ({
+      x: piece.x + cell.x,
+      y: piece.y + cell.y,
+    }));
+    const board = this.state.board.map((row) => [...row]);
+    cells.forEach(({ x, y }) => {
+      if (y >= 0 && y < BOARD_HEIGHT) board[y][x] = piece.type;
+    });
+    const completedRows = board.filter((row) => row.every(Boolean)).length;
+    const remaining = board.filter((row) => !row.every(Boolean));
+    while (remaining.length < BOARD_HEIGHT) {
+      remaining.unshift(Array.from({ length: BOARD_WIDTH }, () => null));
+    }
+
+    const heights: number[] = [];
+    let holes = 0;
+    let coveredHoleDepth = 0;
+    for (let x = 0; x < BOARD_WIDTH; x += 1) {
+      const top = remaining.findIndex((row) => Boolean(row[x]));
+      heights.push(top < 0 ? 0 : BOARD_HEIGHT - top);
+      let blocksAbove = 0;
+      for (let y = 0; y < BOARD_HEIGHT; y += 1) {
+        if (remaining[y][x]) {
+          blocksAbove += 1;
+        } else if (blocksAbove > 0) {
+          holes += 1;
+          coveredHoleDepth += blocksAbove;
+        }
+      }
+    }
+    const aggregateHeight = heights.reduce((sum, height) => sum + height, 0);
+    const bumpiness = heights.slice(1).reduce(
+      (sum, height, index) => sum + Math.abs(height - heights[index]),
+      0,
+    );
+    const maxHeight = Math.max(...heights);
+    const contactFaces = cells.reduce((sum, cell) => {
+      const neighbors = [
+        { x: cell.x - 1, y: cell.y },
+        { x: cell.x + 1, y: cell.y },
+        { x: cell.x, y: cell.y + 1 },
+      ];
+      return sum + neighbors.filter(({ x, y }) => (
+        x < 0
+        || x >= BOARD_WIDTH
+        || y >= BOARD_HEIGHT
+        || (y >= 0 && Boolean(this.state.board[y][x]))
+      )).length;
+    }, 0);
+    const pointerDistance = Math.min(...cells.map((cell) => (
+      Math.abs(cell.x - targetX) * 5 + Math.abs(cell.y - targetY)
+    )));
+    const rotationDistance = Math.min(
+      Math.abs(piece.rotation - active.rotation),
+      4 - Math.abs(piece.rotation - active.rotation),
+    );
+    const previousBonus = previousTarget
+      && previousTarget.x === piece.x
+      && previousTarget.y === piece.y
+      && previousTarget.rotation === piece.rotation
+      ? -18
+      : 0;
+
+    return holes * 900
+      + coveredHoleDepth * 58
+      + aggregateHeight * 8
+      + bumpiness * 17
+      + maxHeight * 14
+      + pointerDistance * 22
+      + rotationDistance * 2
+      + Math.abs(piece.x - active.x) * 0.2
+      - completedRows * 1200
+      - contactFaces * 9
+      + previousBonus;
   }
 
   private spawnNextPiece(type?: Tetromino): void {

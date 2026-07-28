@@ -19,11 +19,12 @@ test('starts, accepts keyboard input, pauses, and restarts', async ({ page }) =>
   await expect(page.getByRole('heading', { name: /run paused/i })).toBeHidden();
 });
 
-test('supports smart mouse aiming, dropping, holding, and persistence', async ({ page }, testInfo) => {
+test('supports cell-targeted mouse placement, dropping, holding, and persistence', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'mobile', 'Desktop mouse-mode assertion');
   await page.goto('/');
   await page.getByRole('button', { name: 'Mouse', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Mouse', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('canvas')).toHaveCSS('cursor', 'auto');
   await page.getByRole('button', { name: /^play$/i }).click();
 
   const board = page.locator('canvas');

@@ -196,6 +196,56 @@ describe('GameEngine', () => {
     expect(engine.getState().aimTarget).toBeNull();
   });
 
+  it('keeps mouse targeting stable while the pointer brushes a cell boundary', () => {
+    const engine = new GameEngine({ random: () => 0.2 });
+    let emissions = 0;
+    engine.subscribe(() => {
+      emissions += 1;
+    });
+    engine.start();
+    const data = internals(engine);
+    data.state.active = { type: 'T', rotation: 0, x: 3, y: 0 };
+    data.state.ghostY = 19;
+
+    engine.aimAt(4.8, BOARD_HEIGHT - 0.5);
+    const afterFirstAim = emissions;
+    engine.aimAt(5.05, BOARD_HEIGHT - 0.5);
+    expect(emissions).toBe(afterFirstAim);
+
+    engine.aimAt(5.3, BOARD_HEIGHT - 0.5);
+    expect(emissions).toBe(afterFirstAim + 1);
+  });
+
+  it('uses the pointed cell to choose a line-clearing orientation', () => {
+    const engine = new GameEngine({ random: () => 0.2, clearDelayMs: 100 });
+    engine.start();
+    const data = internals(engine);
+    for (let y = BOARD_HEIGHT - 4; y < BOARD_HEIGHT; y += 1) {
+      data.state.board[y] = Array.from(
+        { length: BOARD_WIDTH },
+        (_, x) => (x === 5 ? null : 'J'),
+      );
+    }
+    data.state.active = { type: 'I', rotation: 0, x: 3, y: 0 };
+    data.state.ghostY = 16;
+
+    engine.aimAt(5.5, BOARD_HEIGHT - 0.5);
+    const target = engine.getState().aimTarget!;
+    const targetCells = getCells(target.type, target.rotation)
+      .map((cell) => ({ x: target.x + cell.x, y: target.y + cell.y }));
+    expect(new Set(targetCells.map((cell) => cell.x))).toEqual(new Set([5]));
+    expect(targetCells.map((cell) => cell.y).sort((a, b) => a - b)).toEqual([
+      BOARD_HEIGHT - 4,
+      BOARD_HEIGHT - 3,
+      BOARD_HEIGHT - 2,
+      BOARD_HEIGHT - 1,
+    ]);
+
+    engine.commitAim();
+    expect(engine.getState().status).toBe('clearing');
+    expect(engine.getState().clearingRows).toHaveLength(4);
+  });
+
   it('wall-kicks a T piece away from an obstructed boundary', () => {
     const engine = new GameEngine({ random: () => 0.2 });
     engine.start();

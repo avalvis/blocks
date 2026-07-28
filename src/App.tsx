@@ -514,7 +514,7 @@ export function App() {
         <div className="top-actions">
           <span className="desktop-hint">
             {stored.preferences.inputMode === 'mouse'
-              ? 'Aim with cursor · Click to drop'
+              ? 'Point to place · Click to drop'
               : 'Arrows to move · Space to drop'}
           </span>
           <ControlModeSwitch
@@ -548,7 +548,7 @@ export function App() {
             <div className="board-edge" />
             <canvas
               ref={canvasRef}
-              className={`game-board${stored.preferences.inputMode === 'mouse' ? ' mouse-mode' : ''}`}
+              className="game-board"
               width="300"
               height="600"
               aria-label="10 by 20 falling-block game board"
@@ -672,7 +672,7 @@ export function App() {
                   />
                   {stored.preferences.inputMode === 'mouse' ? (
                     <div className="controls-list mouse-controls-list">
-                      <div><kbd>Move</kbd><span>Aim and auto-fit</span></div>
+                      <div><kbd>Move</kbd><span>Point to a landing cell</span></div>
                       <div><kbd>Left</kbd><span>Hard drop</span></div>
                       <div><kbd>Right</kbd><span>Hold piece</span></div>
                       <div><kbd>P</kbd><span>Pause</span></div>

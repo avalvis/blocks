@@ -5,7 +5,6 @@ import {
   LINE_CLEAR_DELAY_MS,
   VISIBLE_HEIGHT,
   type GameState,
-  type Rotation,
   type Tetromino,
 } from '../engine/types';
 
@@ -25,8 +24,6 @@ interface RenderCache {
   clearStartedAt: number;
   visualX: number | null;
   visualType: Tetromino | null;
-  visualRotation: Rotation | null;
-  rotationStartedAt: number;
   lastFrameTime: number;
 }
 
@@ -175,8 +172,6 @@ function getCache(canvas: HTMLCanvasElement, dpr: number): RenderCache {
     clearStartedAt: 0,
     visualX: null,
     visualType: null,
-    visualRotation: null,
-    rotationStartedAt: 0,
     lastFrameTime: 0,
   };
   caches.set(canvas, next);
@@ -333,51 +328,29 @@ export function drawBoard(
     if (cache.visualType !== active.type || cache.visualX === null || !options.smoothMovement) {
       cache.visualX = active.x;
       cache.visualType = active.type;
-      cache.visualRotation = active.rotation;
-      cache.rotationStartedAt = time;
     } else {
-      const factor = 1 - Math.exp(-delta / 36);
+      const factor = 1 - Math.exp(-delta / 28);
       cache.visualX += (active.x - cache.visualX) * factor;
       if (Math.abs(active.x - cache.visualX) < 0.008) cache.visualX = active.x;
       else needsMoreFrames = true;
-
-      if (cache.visualRotation !== active.rotation) {
-        cache.visualRotation = active.rotation;
-        cache.rotationStartedAt = time;
-      }
     }
 
-    const target = state.aimTarget;
-    if (target) {
-      getCells(target.type, target.rotation).forEach((offset) => {
+    const ghost = state.aimTarget
+      ?? (state.ghostY === null ? null : { ...active, y: state.ghostY });
+    if (ghost) {
+      getCells(ghost.type, ghost.rotation).forEach((offset) => {
         drawTile(
           context,
           cache,
-          target.x + offset.x,
-          target.y + offset.y,
-          target.type,
-          0.76,
-          'ghost',
-        );
-      });
-    } else if (state.ghostY !== null) {
-      getCells(active.type, active.rotation).forEach((offset) => {
-        drawTile(
-          context,
-          cache,
-          (cache.visualX ?? active.x) + offset.x,
-          state.ghostY! + offset.y,
-          active.type,
+          ghost.x + offset.x,
+          ghost.y + offset.y,
+          ghost.type,
           0.62,
           'ghost',
         );
       });
     }
 
-    const rotationProgress = clamp01((time - cache.rotationStartedAt) / 82);
-    if (rotationProgress < 1 && options.smoothMovement) needsMoreFrames = true;
-    const activeScale = options.smoothMovement ? 0.9 + easeOutCubic(rotationProgress) * 0.1 : 1;
-    const activeAlpha = options.smoothMovement ? 0.72 + easeOutCubic(rotationProgress) * 0.28 : 1;
     getCells(active.type, active.rotation).forEach((offset) => {
       drawTile(
         context,
@@ -385,15 +358,13 @@ export function drawBoard(
         (cache.visualX ?? active.x) + offset.x,
         active.y + offset.y,
         active.type,
-        activeAlpha,
+        1,
         'solid',
-        activeScale,
       );
     });
   } else {
     cache.visualX = null;
     cache.visualType = null;
-    cache.visualRotation = null;
   }
 
   if (clearKey) drawLineClearEffects(context, state.clearingRows, clearProgress, time);

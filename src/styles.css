@@ -405,10 +405,6 @@ a:focus-visible {
   user-select: none;
 }
 
-.game-board.mouse-mode {
-  cursor: crosshair;
-}
-
 .board-wrap::after {
   position: absolute;
   inset: 0;
