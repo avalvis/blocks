@@ -2,6 +2,7 @@ export const BOARD_WIDTH = 10;
 export const VISIBLE_HEIGHT = 20;
 export const HIDDEN_ROWS = 2;
 export const BOARD_HEIGHT = VISIBLE_HEIGHT + HIDDEN_ROWS;
+export const LINE_CLEAR_DELAY_MS = 260;
 
 export type Tetromino = 'I' | 'J' | 'L' | 'O' | 'S' | 'T' | 'Z';
 export type Rotation = 0 | 1 | 2 | 3;
@@ -54,6 +55,7 @@ export interface GameState {
   status: GameStatus;
   board: Board;
   active: ActivePiece | null;
+  aimTarget: ActivePiece | null;
   ghostY: number | null;
   hold: Tetromino | null;
   queue: Tetromino[];
@@ -80,6 +82,7 @@ export interface GameEngineApi {
   tick(deltaMs: number): void;
   dispatch(action: InputAction): void;
   aimAt(boardX: number, boardY: number): void;
+  commitAim(): void;
   pause(force?: boolean): void;
   getState(): GameState;
   subscribe(listener: (state: GameState) => void): () => void;

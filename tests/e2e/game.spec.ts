@@ -20,7 +20,7 @@ test('starts, accepts keyboard input, pauses, and restarts', async ({ page }) =>
 });
 
 test('supports smart mouse aiming, dropping, holding, and persistence', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'desktop', 'Desktop mouse-mode assertion');
+  test.skip(testInfo.project.name === 'mobile', 'Desktop mouse-mode assertion');
   await page.goto('/');
   await page.getByRole('button', { name: 'Mouse', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Mouse', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -42,6 +42,25 @@ test('supports smart mouse aiming, dropping, holding, and persistence', async ({
 
   await page.reload();
   await expect(page.getByRole('button', { name: 'Mouse', exact: true })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('publishes cache-busted favicon fallbacks', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute('href', '/favicon.svg?v=3');
+  await expect(page.locator('link[rel="icon"][type="image/png"][sizes="32x32"]')).toHaveAttribute(
+    'href',
+    '/favicon-32.png?v=3',
+  );
+  await expect(page.locator('link[rel="shortcut icon"][type="image/x-icon"]')).toHaveAttribute(
+    'href',
+    '/favicon.ico?v=3',
+  );
+
+  for (const asset of ['/favicon.svg?v=3', '/favicon-32.png?v=3', '/favicon.ico?v=3']) {
+    const response = await page.request.get(asset);
+    expect(response.ok()).toBe(true);
+    expect(response.headers()['content-type']).toMatch(/^image\//);
+  }
 });
 
 test('opens help and sound settings', async ({ page }) => {

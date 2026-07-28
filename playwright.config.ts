@@ -14,6 +14,7 @@ export default defineConfig({
   },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', use: { browserName: 'firefox', viewport: { width: 1280, height: 720 } } },
     { name: 'mobile', use: { ...devices['Pixel 7'] } },
   ],
 });

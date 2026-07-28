@@ -182,6 +182,7 @@ describe('GameEngine', () => {
     const rightCells = getCells(right.active!.type, right.active!.rotation)
       .map((cell) => right.active!.x + cell.x);
     expect(Math.max(...rightCells)).toBeGreaterThanOrEqual(8);
+    expect(right.aimTarget).not.toBeNull();
     expect(right.ghostY).not.toBeNull();
 
     engine.aimAt(0, BOARD_HEIGHT - 1);
@@ -189,6 +190,10 @@ describe('GameEngine', () => {
     const leftCells = getCells(left.active!.type, left.active!.rotation)
       .map((cell) => left.active!.x + cell.x);
     expect(Math.min(...leftCells)).toBeLessThanOrEqual(1);
+
+    engine.commitAim();
+    expect(occupiedCount(engine.getState())).toBe(4);
+    expect(engine.getState().aimTarget).toBeNull();
   });
 
   it('wall-kicks a T piece away from an obstructed boundary', () => {

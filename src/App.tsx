@@ -262,6 +262,12 @@ export function App() {
     audioRef.current?.playAction(action);
   }, [engine]);
 
+  const commitMouseDrop = useCallback(() => {
+    void audioRef.current?.unlock();
+    engine.commitAim();
+    audioRef.current?.playAction('hardDrop');
+  }, [engine]);
+
   const aimAtLastMouseTarget = useCallback(() => {
     const target = mouseTargetRef.current;
     if (!target) return;
@@ -319,8 +325,9 @@ export function App() {
         canvasRef.current
         && (drawNeededRef.current || stateRef.current.status === 'clearing')
       ) {
-        drawBoard(canvasRef.current, stateRef.current, time);
-        drawNeededRef.current = false;
+        drawNeededRef.current = drawBoard(canvasRef.current, stateRef.current, time, {
+          smoothMovement: storedRef.current.preferences.inputMode === 'mouse',
+        });
       }
       frame = requestAnimationFrame(animate);
     };
@@ -448,11 +455,11 @@ export function App() {
       engine.aimAt(target.x, target.y);
       if (game.status !== 'playing') return;
       if (event.button === 0) {
-        performAction('hardDrop');
-        aimAtLastMouseTarget();
+        commitMouseDrop();
+        engine.aimAt(target.x, target.y);
       } else if (event.button === 2) {
         performAction('hold');
-        aimAtLastMouseTarget();
+        engine.aimAt(target.x, target.y);
       }
       return;
     }

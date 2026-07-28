@@ -4,6 +4,7 @@ import {
   BOARD_HEIGHT,
   BOARD_WIDTH,
   HIDDEN_ROWS,
+  LINE_CLEAR_DELAY_MS,
   type ActivePiece,
   type Board,
   type EngineOptions,
@@ -27,6 +28,7 @@ function initialState(): GameState {
     status: 'ready',
     board: emptyBoard(),
     active: null,
+    aimTarget: null,
     ghostY: null,
     hold: null,
     queue: [],
@@ -58,7 +60,7 @@ export class GameEngine implements GameEngineApi {
 
   constructor(options: EngineOptions = {}) {
     this.random = options.random ?? Math.random;
-    this.clearDelayMs = options.clearDelayMs ?? 160;
+    this.clearDelayMs = options.clearDelayMs ?? LINE_CLEAR_DELAY_MS;
     this.lockDelayMs = options.lockDelayMs ?? 500;
     this.fillQueue();
   }
@@ -122,6 +124,7 @@ export class GameEngine implements GameEngineApi {
       return;
     }
     if (this.state.status !== 'playing' || !this.state.active) return;
+    this.state.aimTarget = null;
 
     let changed = false;
     switch (action) {
@@ -163,7 +166,10 @@ export class GameEngine implements GameEngineApi {
 
     const targetX = Math.max(0, Math.min(BOARD_WIDTH - 1, boardX));
     const targetY = Math.max(HIDDEN_ROWS, Math.min(BOARD_HEIGHT - 1, boardY));
-    let best: { piece: ActivePiece; ghostY: number; score: number } | null = null;
+    const previousTarget = this.state.aimTarget;
+    const reference = previousTarget ?? active;
+    let best: { piece: ActivePiece; score: number } | null = null;
+    let stable: { piece: ActivePiece; score: number } | null = null;
 
     for (let rotationIndex = 0; rotationIndex < 4; rotationIndex += 1) {
       const rotation = rotationIndex as Rotation;
@@ -172,46 +178,94 @@ export class GameEngine implements GameEngineApi {
       const maxX = Math.max(...cells.map((cell) => cell.x));
 
       for (let x = -minX; x < BOARD_WIDTH - maxX; x += 1) {
-        const candidate: ActivePiece = { ...active, rotation, x };
-        if (this.collides(candidate)) continue;
+        for (let y = 0; y < BOARD_HEIGHT; y += 1) {
+          const candidate: ActivePiece = { type: active.type, rotation, x, y };
+          if (this.collides(candidate) || !this.isGrounded(candidate)) continue;
 
-        let ghostY = candidate.y;
-        while (!this.collides({ ...candidate, y: ghostY + 1 })) ghostY += 1;
+          const landingCells = cells.map((cell) => ({
+            x: x + cell.x,
+            y: y + cell.y,
+          }));
+          const pointerDistance = Math.min(...landingCells.map((cell) => (
+            Math.pow(cell.x - targetX, 2) + Math.pow((cell.y - targetY) * 0.68, 2)
+          )));
+          const horizontalCenter = landingCells.reduce((sum, cell) => sum + cell.x, 0)
+            / landingCells.length;
+          const horizontalDistance = Math.abs(horizontalCenter - targetX);
+          const rotationDistance = Math.min(
+            Math.abs(rotation - reference.rotation),
+            4 - Math.abs(rotation - reference.rotation),
+          );
+          const movementDistance = Math.abs(x - reference.x);
+          const score = pointerDistance * 36
+            + horizontalDistance * 4
+            + rotationDistance * 2.6
+            + movementDistance * 0.12;
+          const result = { piece: candidate, score };
 
-        const landingCells = cells.map((cell) => ({
-          x: x + cell.x,
-          y: ghostY + cell.y,
-        }));
-        const pointerDistance = Math.min(...landingCells.map((cell) => (
-          Math.pow(cell.x - targetX, 2) + Math.pow((cell.y - targetY) * 0.72, 2)
-        )));
-        const horizontalCenter = landingCells.reduce((sum, cell) => sum + cell.x, 0) / landingCells.length;
-        const horizontalDistance = Math.abs(horizontalCenter - targetX);
-        const rotationDistance = Math.min(
-          Math.abs(rotation - active.rotation),
-          4 - Math.abs(rotation - active.rotation),
-        );
-        const movementDistance = Math.abs(x - active.x);
-        const score = pointerDistance * 100
-          + horizontalDistance * 6
-          + rotationDistance * 0.35
-          + movementDistance * 0.015;
-
-        if (!best || score < best.score) best = { piece: candidate, ghostY, score };
+          if (
+            previousTarget
+            && previousTarget.x === x
+            && previousTarget.y === y
+            && previousTarget.rotation === rotation
+          ) stable = result;
+          if (!best || score < best.score) best = result;
+        }
       }
     }
 
     if (!best) return;
-    const changed = best.piece.x !== active.x
-      || best.piece.rotation !== active.rotation
-      || best.ghostY !== this.state.ghostY;
+    if (stable && stable.score <= best.score + 9) best = stable;
+
+    const targetChanged = !previousTarget
+      || best.piece.x !== previousTarget.x
+      || best.piece.y !== previousTarget.y
+      || best.piece.rotation !== previousTarget.rotation;
+    const preview = { ...active, x: best.piece.x, rotation: best.piece.rotation };
+    const canPreview = !this.collides(preview);
+    const activeChanged = canPreview
+      && (preview.x !== active.x || preview.rotation !== active.rotation);
+    const changed = targetChanged || activeChanged;
     if (!changed) return;
 
-    this.state.active = best.piece;
-    this.state.ghostY = best.ghostY;
-    this.lastMoveWasRotation = best.piece.rotation !== active.rotation;
-    this.resetGroundLock();
+    this.state.aimTarget = best.piece;
+    if (activeChanged) {
+      this.state.active = preview;
+      this.lastMoveWasRotation = preview.rotation !== active.rotation;
+      this.updateGhost();
+      this.resetGroundLock();
+    }
     this.emit();
+  }
+
+  commitAim(): void {
+    const active = this.state.active;
+    const target = this.state.aimTarget;
+    if (
+      this.state.status !== 'playing'
+      || !active
+      || !target
+      || target.type !== active.type
+      || target.y < active.y
+      || this.collides(target)
+      || !this.isGrounded(target)
+    ) {
+      this.state.aimTarget = null;
+      this.hardDrop();
+      return;
+    }
+
+    const distance = target.y - active.y;
+    const points = Math.max(0, distance) * 2;
+    this.lastMoveWasRotation = target.rotation !== active.rotation;
+    this.state.active = { ...target };
+    this.state.aimTarget = null;
+    this.state.ghostY = target.y;
+    if (points > 0) {
+      this.state.score += points;
+      this.setScoreEvent({ kind: 'drop', points, label: `+${points} hard drop` });
+    }
+    this.lockPiece();
   }
 
   pause(force?: boolean): void {
@@ -238,6 +292,7 @@ export class GameEngine implements GameEngineApi {
       ...this.state,
       board: this.state.board.map((row) => [...row]),
       active: this.state.active ? { ...this.state.active } : null,
+      aimTarget: this.state.aimTarget ? { ...this.state.aimTarget } : null,
       queue: [...this.state.queue],
       clearingRows: [...this.state.clearingRows],
       lastScoreEvent: this.state.lastScoreEvent ? { ...this.state.lastScoreEvent } : null,
@@ -267,6 +322,7 @@ export class GameEngine implements GameEngineApi {
     this.fillQueue();
     const piece: ActivePiece = { type: nextType, rotation: 0, x: 3, y: 0 };
     this.state.active = piece;
+    this.state.aimTarget = null;
     this.state.canHold = true;
     this.gravityAccumulator = 0;
     this.lockAccumulator = 0;
@@ -346,6 +402,7 @@ export class GameEngine implements GameEngineApi {
   private lockPiece(): void {
     const active = this.state.active;
     if (!active) return;
+    this.state.aimTarget = null;
     const tSpin = this.detectTSpin(active);
     for (const cell of getCells(active.type, active.rotation)) {
       const x = active.x + cell.x;
@@ -486,6 +543,7 @@ export class GameEngine implements GameEngineApi {
   private endGame(): void {
     this.state.status = 'gameOver';
     this.state.active = null;
+    this.state.aimTarget = null;
     this.state.ghostY = null;
     this.emit();
   }

@@ -1,85 +1,133 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
+import { deflateSync } from 'node:zlib';
 
-const width = 32;
-const height = 32;
-const pixels = Buffer.alloc(width * height * 4);
-const maskStride = Math.ceil(width / 32) * 4;
-const mask = Buffer.alloc(maskStride * height);
+const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+const crcTable = Array.from({ length: 256 }, (_, index) => {
+  let value = index;
+  for (let bit = 0; bit < 8; bit += 1) {
+    value = (value & 1) ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+  }
+  return value >>> 0;
+});
 
-function insideRoundedSquare(x, y, inset, size, radius) {
-  if (x < inset || y < inset || x >= inset + size || y >= inset + size) return false;
-  const nearestX = Math.max(inset + radius, Math.min(x, inset + size - radius - 1));
-  const nearestY = Math.max(inset + radius, Math.min(y, inset + size - radius - 1));
+function crc32(buffer) {
+  let crc = 0xffffffff;
+  for (const byte of buffer) crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type, data) {
+  const name = Buffer.from(type);
+  const chunk = Buffer.alloc(12 + data.length);
+  chunk.writeUInt32BE(data.length, 0);
+  name.copy(chunk, 4);
+  data.copy(chunk, 8);
+  chunk.writeUInt32BE(crc32(Buffer.concat([name, data])), 8 + data.length);
+  return chunk;
+}
+
+function insideRoundedSquare(x, y, size) {
+  const inset = size / 32;
+  const extent = size - inset * 2;
+  const radius = size * 0.22;
+  if (x < inset || y < inset || x >= inset + extent || y >= inset + extent) return false;
+  const nearestX = Math.max(inset + radius, Math.min(x, inset + extent - radius));
+  const nearestY = Math.max(inset + radius, Math.min(y, inset + extent - radius));
   return Math.hypot(x - nearestX, y - nearestY) <= radius;
 }
 
-const cells = new Set(['0,0', '0,1', '1,1', '2,1']);
-for (let y = 0; y < height; y += 1) {
-  for (let x = 0; x < width; x += 1) {
-    const row = height - 1 - y;
-    const offset = (row * width + x) * 4;
-    let red = 0;
-    let green = 0;
-    let blue = 0;
-    let alpha = 0;
+function renderIcon(size) {
+  const rgba = Buffer.alloc(size * size * 4);
+  const cells = new Set(['0,0', '0,1', '1,1', '2,1']);
+  const block = size * 0.21875;
+  const gap = size * 0.03125;
+  const originX = size * 0.125;
+  const originY = size * 0.25;
 
-    if (insideRoundedSquare(x, y, 1, 30, 7)) {
-      red = 14;
-      green = 9;
-      blue = 30;
-      alpha = 255;
-    }
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const offset = (y * size + x) * 4;
+      let red = 0;
+      let green = 0;
+      let blue = 0;
+      let alpha = 0;
 
-    const block = 7;
-    const gap = 1;
-    const originX = 4;
-    const originY = 8;
-    for (let cellY = 0; cellY < 2; cellY += 1) {
-      for (let cellX = 0; cellX < 3; cellX += 1) {
-        if (!cells.has(`${cellX},${cellY}`)) continue;
-        const left = originX + cellX * (block + gap);
-        const top = originY + cellY * (block + gap);
-        if (x >= left && x < left + block && y >= top && y < top + block) {
-          const highlight = x === left || y === top;
-          red = highlight ? 112 : 34;
-          green = highlight ? 255 : 230;
-          blue = highlight ? 252 : 227;
-          alpha = 255;
+      if (insideRoundedSquare(x + 0.5, y + 0.5, size)) {
+        red = 14;
+        green = 9;
+        blue = 30;
+        alpha = 255;
+      }
+
+      for (let cellY = 0; cellY < 2; cellY += 1) {
+        for (let cellX = 0; cellX < 3; cellX += 1) {
+          if (!cells.has(`${cellX},${cellY}`)) continue;
+          const left = originX + cellX * (block + gap);
+          const top = originY + cellY * (block + gap);
+          if (x + 0.5 >= left && x + 0.5 < left + block && y + 0.5 >= top && y + 0.5 < top + block) {
+            const highlight = x + 0.5 < left + Math.max(1, size / 32)
+              || y + 0.5 < top + Math.max(1, size / 32);
+            red = highlight ? 112 : 34;
+            green = highlight ? 255 : 230;
+            blue = highlight ? 252 : 227;
+            alpha = 255;
+          }
         }
       }
-    }
 
-    pixels[offset] = blue;
-    pixels[offset + 1] = green;
-    pixels[offset + 2] = red;
-    pixels[offset + 3] = alpha;
+      rgba[offset] = red;
+      rgba[offset + 1] = green;
+      rgba[offset + 2] = blue;
+      rgba[offset + 3] = alpha;
+    }
   }
+  return rgba;
 }
 
-const dib = Buffer.alloc(40);
-dib.writeUInt32LE(40, 0);
-dib.writeInt32LE(width, 4);
-dib.writeInt32LE(height * 2, 8);
-dib.writeUInt16LE(1, 12);
-dib.writeUInt16LE(32, 14);
-dib.writeUInt32LE(0, 16);
-dib.writeUInt32LE(pixels.length, 20);
+function encodePng(size) {
+  const rgba = renderIcon(size);
+  const scanlines = Buffer.alloc((size * 4 + 1) * size);
+  for (let y = 0; y < size; y += 1) {
+    const rowOffset = y * (size * 4 + 1);
+    scanlines[rowOffset] = 0;
+    rgba.copy(scanlines, rowOffset + 1, y * size * 4, (y + 1) * size * 4);
+  }
 
-const image = Buffer.concat([dib, pixels, mask]);
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(size, 0);
+  ihdr.writeUInt32BE(size, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  return Buffer.concat([
+    signature,
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', deflateSync(scanlines, { level: 9 })),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+const sizes = [16, 32, 48];
+const images = sizes.map(encodePng);
 const header = Buffer.alloc(6);
 header.writeUInt16LE(0, 0);
 header.writeUInt16LE(1, 2);
-header.writeUInt16LE(1, 4);
+header.writeUInt16LE(images.length, 4);
 
-const entry = Buffer.alloc(16);
-entry.writeUInt8(width, 0);
-entry.writeUInt8(height, 1);
-entry.writeUInt8(0, 2);
-entry.writeUInt8(0, 3);
-entry.writeUInt16LE(1, 4);
-entry.writeUInt16LE(32, 6);
-entry.writeUInt32LE(image.length, 8);
-entry.writeUInt32LE(header.length + entry.length, 12);
+let offset = header.length + images.length * 16;
+const entries = images.map((image, index) => {
+  const entry = Buffer.alloc(16);
+  entry.writeUInt8(sizes[index], 0);
+  entry.writeUInt8(sizes[index], 1);
+  entry.writeUInt16LE(1, 4);
+  entry.writeUInt16LE(32, 6);
+  entry.writeUInt32LE(image.length, 8);
+  entry.writeUInt32LE(offset, 12);
+  offset += image.length;
+  return entry;
+});
 
-await mkdir(new URL('../public/', import.meta.url), { recursive: true });
-await writeFile(new URL('../public/favicon.ico', import.meta.url), Buffer.concat([header, entry, image]));
+await Promise.all([
+  writeFile(new URL('../public/favicon.ico', import.meta.url), Buffer.concat([header, ...entries, ...images])),
+  writeFile(new URL('../public/favicon-16.png', import.meta.url), images[0]),
+  writeFile(new URL('../public/favicon-32.png', import.meta.url), images[1]),
+]);
