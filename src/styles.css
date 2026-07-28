@@ -861,13 +861,109 @@ a:focus-visible {
 }
 
 .footer {
-  height: 48px;
-  justify-content: flex-end;
+  height: 56px;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
   color: #524b64;
   font-family: 'DM Mono', monospace;
   font-size: 0.54rem;
   letter-spacing: 0.06em;
+}
+
+.footer-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer-link {
+  position: relative;
+  display: flex;
+  height: 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 9px;
+  color: #837a98;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)),
+    rgba(11, 7, 20, 0.5);
+  text-decoration: none;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.footer-link::after {
+  position: absolute;
+  inset: auto -12px -18px;
+  height: 24px;
+  border-radius: 50%;
+  background: currentColor;
+  content: '';
+  filter: blur(15px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.footer-link svg {
+  position: relative;
+  z-index: 1;
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+.footer-site svg,
+.footer-email svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.footer-link span {
+  position: relative;
+  z-index: 1;
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.footer-github:hover {
+  color: #f8f5ff;
+  border-color: rgba(248, 245, 255, 0.3);
+  box-shadow: 0 5px 18px rgba(248, 245, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.footer-site:hover {
+  color: var(--cyan);
+  border-color: rgba(34, 230, 227, 0.34);
+  box-shadow: 0 5px 18px rgba(34, 230, 227, 0.1);
+  transform: translateY(-1px);
+}
+
+.footer-email:hover {
+  color: var(--pink);
+  border-color: rgba(240, 110, 255, 0.34);
+  box-shadow: 0 5px 18px rgba(240, 110, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.footer-link:hover::after {
+  opacity: 0.16;
+}
+
+.footer-version {
+  color: #524b64;
 }
 
 .modal-backdrop {

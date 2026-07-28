@@ -74,6 +74,23 @@ test('opens help and sound settings', async ({ page }) => {
   await expect(page.getByLabel('Master volume')).toBeVisible();
 });
 
+test('publishes themed creator links in the footer', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile', 'The compact mobile layout hides the footer');
+  await page.goto('/');
+  await expect(page.getByRole('link', { name: 'Avalvis on GitHub' })).toHaveAttribute(
+    'href',
+    'https://github.com/avalvis',
+  );
+  await expect(page.getByRole('link', { name: 'Visit avalvis.gr' })).toHaveAttribute(
+    'href',
+    'https://www.avalvis.gr/',
+  );
+  await expect(page.getByRole('link', { name: 'Email info@avalvis.gr' })).toHaveAttribute(
+    'href',
+    'mailto:info@avalvis.gr',
+  );
+});
+
 test('shows usable touch controls on a mobile viewport', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile', 'Mobile-only layout assertion');
   await page.goto('/');

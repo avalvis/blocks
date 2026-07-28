@@ -652,7 +652,48 @@ export function App() {
       </main>
 
       <footer className="footer">
-        <span>v1.0</span>
+        <nav className="footer-links" aria-label="Creator links">
+          <a
+            className="footer-link footer-github"
+            href="https://github.com/avalvis"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Avalvis on GitHub"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.87c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.64-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.57 9.57 0 0 1 12 6.82c.85 0 1.71.11 2.51.34 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.86v2.76c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"
+              />
+            </svg>
+            <span>GitHub</span>
+          </a>
+          <a
+            className="footer-link footer-site"
+            href="https://www.avalvis.gr/"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Visit avalvis.gr"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="8.5" />
+              <path d="M3.8 12h16.4M12 3.5c2.2 2.35 3.3 5.18 3.3 8.5S14.2 18.15 12 20.5C9.8 18.15 8.7 15.32 8.7 12S9.8 5.85 12 3.5Z" />
+            </svg>
+            <span>avalvis.gr</span>
+          </a>
+          <a
+            className="footer-link footer-email"
+            href="mailto:info@avalvis.gr"
+            aria-label="Email info@avalvis.gr"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
+              <path d="m5 7 7 5.5L19 7" />
+            </svg>
+            <span>Email</span>
+          </a>
+        </nav>
+        <span className="footer-version">v1.0</span>
       </footer>
 
       {panel && (
