@@ -79,6 +79,7 @@ export interface GameEngineApi {
   restart(): void;
   tick(deltaMs: number): void;
   dispatch(action: InputAction): void;
+  aimAt(boardX: number, boardY: number): void;
   pause(force?: boolean): void;
   getState(): GameState;
   subscribe(listener: (state: GameState) => void): () => void;

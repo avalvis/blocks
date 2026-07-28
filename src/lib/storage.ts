@@ -3,6 +3,7 @@ export interface Preferences {
   effectsEnabled: boolean;
   volume: number;
   helpDismissed: boolean;
+  inputMode: 'keyboard' | 'mouse';
 }
 
 export interface StoredData {
@@ -18,6 +19,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   effectsEnabled: true,
   volume: 0.65,
   helpDismissed: false,
+  inputMode: 'keyboard',
 };
 
 export function loadStoredData(storage: Pick<Storage, 'getItem'> = localStorage): StoredData {
@@ -36,6 +38,7 @@ export function loadStoredData(storage: Pick<Storage, 'getItem'> = localStorage)
         effectsEnabled: parsed.preferences.effectsEnabled !== false,
         volume: Math.min(1, Math.max(0, Number(parsed.preferences.volume) || 0)),
         helpDismissed: parsed.preferences.helpDismissed === true,
+        inputMode: parsed.preferences.inputMode === 'mouse' ? 'mouse' : 'keyboard',
       },
     };
   } catch {

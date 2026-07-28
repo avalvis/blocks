@@ -21,15 +21,14 @@ Open `http://127.0.0.1:4173`.
 
 ## Controls
 
-| Action | Keyboard | Touch |
-| --- | --- | --- |
-| Move | Arrow Left/Right or A/D | Buttons or horizontal swipe |
-| Soft drop | Arrow Down or S | Down button or downward drag |
-| Rotate clockwise | Arrow Up, W, or X | Rotate button or board tap |
-| Rotate counter-clockwise | Z or Q | Counter-clockwise button |
-| Hard drop | Space | Hard-drop button or upward flick |
-| Hold | C or Shift | Hold button |
-| Pause | P or Escape | Header pause button |
+| Action | Keyboard | Mouse mode | Touch |
+| --- | --- | --- | --- |
+| Move | Arrow Left/Right or A/D | Aim over the board | Buttons or horizontal swipe |
+| Soft drop | Arrow Down or S | Automatic placement | Down button or downward drag |
+| Rotate | Arrow Up/W/X or Z/Q | Automatic best fit | Rotation buttons or board tap |
+| Hard drop | Space | Left click | Drop button or upward flick |
+| Hold | C or Shift | Right click | Hold button |
+| Pause | P or Escape | Header pause button | Header pause button |
 
 ## Architecture
 

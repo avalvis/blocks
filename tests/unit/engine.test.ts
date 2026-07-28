@@ -170,6 +170,27 @@ describe('GameEngine', () => {
     }
   });
 
+  it('aims a piece toward the mouse target and selects a legal landing', () => {
+    const engine = new GameEngine({ random: () => 0.2 });
+    engine.start();
+    const data = internals(engine);
+    data.state.active = { type: 'T', rotation: 0, x: 3, y: 0 };
+    data.state.ghostY = 19;
+
+    engine.aimAt(9, BOARD_HEIGHT - 1);
+    const right = engine.getState();
+    const rightCells = getCells(right.active!.type, right.active!.rotation)
+      .map((cell) => right.active!.x + cell.x);
+    expect(Math.max(...rightCells)).toBeGreaterThanOrEqual(8);
+    expect(right.ghostY).not.toBeNull();
+
+    engine.aimAt(0, BOARD_HEIGHT - 1);
+    const left = engine.getState();
+    const leftCells = getCells(left.active!.type, left.active!.rotation)
+      .map((cell) => left.active!.x + cell.x);
+    expect(Math.min(...leftCells)).toBeLessThanOrEqual(1);
+  });
+
   it('wall-kicks a T piece away from an obstructed boundary', () => {
     const engine = new GameEngine({ random: () => 0.2 });
     engine.start();

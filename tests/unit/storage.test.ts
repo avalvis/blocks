@@ -28,6 +28,21 @@ describe('storage', () => {
     expect(data.highScore).toBe(0);
     expect(data.preferences.volume).toBe(1);
     expect(data.preferences.musicEnabled).toBe(false);
+    expect(data.preferences.inputMode).toBe('keyboard');
+  });
+
+  it('restores the saved mouse control mode', () => {
+    const storage = {
+      getItem: () => JSON.stringify({
+        version: 1,
+        highScore: 100,
+        preferences: {
+          ...DEFAULT_PREFERENCES,
+          inputMode: 'mouse',
+        },
+      }),
+    };
+    expect(loadStoredData(storage).preferences.inputMode).toBe('mouse');
   });
 
   it('writes a versioned save payload', () => {

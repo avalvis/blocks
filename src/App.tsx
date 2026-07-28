@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { GameEngine } from './engine/GameEngine';
 import { getCells, PIECE_COLORS } from './engine/pieces';
-import type { GameState, InputAction, Tetromino } from './engine/types';
+import {
+  BOARD_WIDTH,
+  HIDDEN_ROWS,
+  VISIBLE_HEIGHT,
+  type GameState,
+  type InputAction,
+  type Tetromino,
+} from './engine/types';
 import { ArcadeAudio } from './lib/audio';
 import {
   loadStoredData,
@@ -87,6 +94,60 @@ function IconButton({
   );
 }
 
+function ControlModeSwitch({
+  mode,
+  onChange,
+  compact = false,
+}: {
+  mode: Preferences['inputMode'];
+  onChange: (mode: Preferences['inputMode']) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={`mode-switch${compact ? ' compact' : ''}`}
+      role="group"
+      aria-label="Desktop control mode"
+    >
+      <button
+        type="button"
+        className={mode === 'keyboard' ? 'active' : ''}
+        aria-pressed={mode === 'keyboard'}
+        onClick={() => onChange('keyboard')}
+      >
+        Keys
+      </button>
+      <button
+        type="button"
+        className={mode === 'mouse' ? 'active' : ''}
+        aria-pressed={mode === 'mouse'}
+        onClick={() => onChange('mouse')}
+      >
+        Mouse
+      </button>
+    </div>
+  );
+}
+
+function IntroGraphic() {
+  return (
+    <div className="intro-graphic" aria-hidden="true">
+      <span className="graphic-pixel pixel-one" />
+      <span className="graphic-pixel pixel-two" />
+      <div className="falling-mark"><i /><i /><i /><i /></div>
+      <div className="stack-line">
+        <span className="stack-cyan" />
+        <span className="stack-violet" />
+        <span className="stack-violet" />
+        <span className="stack-pink" />
+        <span className="stack-pink" />
+        <span className="stack-pink" />
+      </div>
+      <span className="scan-line" />
+    </div>
+  );
+}
+
 function TouchButton({
   label,
   action,
@@ -149,21 +210,23 @@ export function App() {
   const [panel, setPanel] = useState<'help' | 'settings' | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef(game);
+  const storedRef = useRef(stored);
+  const drawNeededRef = useRef(true);
   const audioRef = useRef<ArcadeAudio | null>(null);
   const gestureRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const mouseTargetRef = useRef<{ x: number; y: number } | null>(null);
+  const mouseAimFrameRef = useRef<number | null>(null);
+  const highScoreSaveTimerRef = useRef<number | null>(null);
+  const previousActiveRef = useRef(game.active);
   const previousEventRef = useRef(0);
   const previousStatusRef = useRef(game.status);
 
   if (!audioRef.current) audioRef.current = new ArcadeAudio(stored.preferences);
 
-  const persist = useCallback((next: StoredData) => {
-    setStored(next);
-    saveStoredData(next);
-  }, []);
-
   const updatePreferences = useCallback((patch: Partial<Preferences>) => {
     setStored((current) => {
       const next = { ...current, preferences: { ...current.preferences, ...patch } };
+      storedRef.current = next;
       saveStoredData(next);
       audioRef.current?.update(next.preferences);
       return next;
@@ -175,6 +238,26 @@ export function App() {
     engine.dispatch(action);
     audioRef.current?.playAction(action);
   }, [engine]);
+
+  const aimAtLastMouseTarget = useCallback(() => {
+    const target = mouseTargetRef.current;
+    if (!target) return;
+    if (mouseAimFrameRef.current !== null) window.cancelAnimationFrame(mouseAimFrameRef.current);
+    mouseAimFrameRef.current = window.requestAnimationFrame(() => {
+      mouseAimFrameRef.current = null;
+      engine.aimAt(target.x, target.y);
+    });
+  }, [engine]);
+
+  const targetFromPointer = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const target = {
+      x: ((event.clientX - bounds.left) / bounds.width) * BOARD_WIDTH,
+      y: HIDDEN_ROWS + ((event.clientY - bounds.top) / bounds.height) * VISIBLE_HEIGHT,
+    };
+    mouseTargetRef.current = target;
+    return target;
+  }, []);
 
   const startGame = useCallback(() => {
     void audioRef.current?.unlock();
@@ -198,6 +281,7 @@ export function App() {
 
   useEffect(() => engine.subscribe((next) => {
     stateRef.current = next;
+    drawNeededRef.current = true;
     setGame(next);
   }), [engine]);
 
@@ -208,18 +292,72 @@ export function App() {
       const delta = time - last;
       last = time;
       engine.tick(delta);
-      if (canvasRef.current) drawBoard(canvasRef.current, stateRef.current, time);
+      if (
+        canvasRef.current
+        && (drawNeededRef.current || stateRef.current.status === 'clearing')
+      ) {
+        drawBoard(canvasRef.current, stateRef.current, time);
+        drawNeededRef.current = false;
+      }
       frame = requestAnimationFrame(animate);
     };
+    const requestDraw = () => {
+      drawNeededRef.current = true;
+    };
+    window.addEventListener('resize', requestDraw);
     frame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      window.removeEventListener('resize', requestDraw);
+      cancelAnimationFrame(frame);
+    };
   }, [engine]);
 
   useEffect(() => {
     if (game.score > stored.highScore) {
-      persist({ ...stored, highScore: game.score });
+      const next = { ...stored, highScore: game.score };
+      storedRef.current = next;
+      setStored(next);
+      if (highScoreSaveTimerRef.current !== null) {
+        window.clearTimeout(highScoreSaveTimerRef.current);
+      }
+      highScoreSaveTimerRef.current = window.setTimeout(() => {
+        highScoreSaveTimerRef.current = null;
+        saveStoredData(storedRef.current);
+      }, 300);
     }
-  }, [game.score, persist, stored]);
+  }, [game.score, stored]);
+
+  useEffect(() => {
+    storedRef.current = stored;
+  }, [stored]);
+
+  useEffect(() => {
+    const flushStoredData = () => {
+      if (highScoreSaveTimerRef.current !== null) {
+        window.clearTimeout(highScoreSaveTimerRef.current);
+        highScoreSaveTimerRef.current = null;
+        saveStoredData(storedRef.current);
+      }
+    };
+    window.addEventListener('pagehide', flushStoredData);
+    return () => {
+      window.removeEventListener('pagehide', flushStoredData);
+      flushStoredData();
+    };
+  }, []);
+
+  useEffect(() => {
+    const previous = previousActiveRef.current;
+    const active = game.active;
+    const spawned = Boolean(
+      active
+      && (!previous || previous.y > active.y + 3 || previous.type !== active.type),
+    );
+    previousActiveRef.current = active;
+    if (spawned && stored.preferences.inputMode === 'mouse') {
+      aimAtLastMouseTarget();
+    }
+  }, [aimAtLastMouseTarget, game.active, stored.preferences.inputMode]);
 
   useEffect(() => {
     if (game.eventId !== previousEventRef.current && game.lastScoreEvent) {
@@ -275,14 +413,42 @@ export function App() {
     };
   }, [engine, panel, performAction]);
 
-  useEffect(() => () => audioRef.current?.dispose(), []);
+  useEffect(() => () => {
+    if (mouseAimFrameRef.current !== null) cancelAnimationFrame(mouseAimFrameRef.current);
+    audioRef.current?.dispose();
+  }, []);
 
   const onGestureStart = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (event.pointerType === 'mouse' && stored.preferences.inputMode === 'mouse') {
+      event.preventDefault();
+      const target = targetFromPointer(event);
+      engine.aimAt(target.x, target.y);
+      if (game.status !== 'playing') return;
+      if (event.button === 0) {
+        performAction('hardDrop');
+        aimAtLastMouseTarget();
+      } else if (event.button === 2) {
+        performAction('hold');
+        aimAtLastMouseTarget();
+      }
+      return;
+    }
     gestureRef.current = { x: event.clientX, y: event.clientY, time: performance.now() };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
+  const onBoardPointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (
+      event.pointerType !== 'mouse'
+      || stored.preferences.inputMode !== 'mouse'
+      || game.status !== 'playing'
+    ) return;
+    targetFromPointer(event);
+    aimAtLastMouseTarget();
+  };
+
   const onGestureEnd = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (event.pointerType === 'mouse' && stored.preferences.inputMode === 'mouse') return;
     const start = gestureRef.current;
     gestureRef.current = null;
     if (!start || game.status !== 'playing') return;
@@ -316,7 +482,16 @@ export function App() {
           <span>blocks</span>
         </a>
         <div className="top-actions">
-          <span className="desktop-hint">Arrows to move · Space to drop</span>
+          <span className="desktop-hint">
+            {stored.preferences.inputMode === 'mouse'
+              ? 'Aim with cursor · Click to drop'
+              : 'Arrows to move · Space to drop'}
+          </span>
+          <ControlModeSwitch
+            compact
+            mode={stored.preferences.inputMode}
+            onChange={(inputMode) => updatePreferences({ inputMode })}
+          />
           <IconButton label="Pause game" onClick={() => performAction('pause')}>Ⅱ</IconButton>
           <IconButton label="Open controls" onClick={() => openPanel('help')}>?</IconButton>
           <IconButton label="Open sound settings" onClick={() => openPanel('settings')}>♪</IconButton>
@@ -330,7 +505,7 @@ export function App() {
               <span className="hud-label">Hold</span>
               <PreviewPiece type={game.hold} label="Held piece" />
               <span className={`ready-dot ${game.canHold ? 'available' : ''}`}>
-                {game.canHold ? 'ready' : 'used'}
+                {game.canHold ? 'available' : 'locked'}
               </span>
             </div>
             <div className="hud-card best-card">
@@ -343,13 +518,17 @@ export function App() {
             <div className="board-edge" />
             <canvas
               ref={canvasRef}
-              className="game-board"
+              className={`game-board${stored.preferences.inputMode === 'mouse' ? ' mouse-mode' : ''}`}
               width="300"
               height="600"
               aria-label="10 by 20 falling-block game board"
               onPointerDown={onGestureStart}
+              onPointerMove={onBoardPointerMove}
               onPointerUp={onGestureEnd}
               onPointerCancel={() => { gestureRef.current = null; }}
+              onContextMenu={(event) => {
+                if (stored.preferences.inputMode === 'mouse') event.preventDefault();
+              }}
             />
             {game.lastScoreEvent && game.status !== 'ready' && (
               <div className="score-toast" key={game.eventId} aria-live="polite">
@@ -359,29 +538,35 @@ export function App() {
             )}
             {game.status === 'ready' && (
               <div className="game-overlay intro-overlay">
-                <span className="eyebrow">Pure arcade puzzle</span>
-                <h1>Find your<br /><em>flow.</em></h1>
-                <p>Stack bright. Clear clean. Keep moving.</p>
+                <span className="eyebrow">Blocks / 01</span>
+                <IntroGraphic />
+                <h1>Make<br /><em>space.</em></h1>
+                <p>Seven pieces. One board. No excuses.</p>
                 <button className="primary-button" type="button" onClick={startGame}>
-                  Play blocks <span>→</span>
+                  Start game <span>→</span>
                 </button>
-                <span className="overlay-note">Space or tap to hard drop</span>
+                <span className="overlay-note desktop-overlay-note">
+                  {stored.preferences.inputMode === 'mouse'
+                    ? 'Aim · left click drops · right click holds'
+                    : 'Arrows move · space drops'}
+                </span>
+                <span className="overlay-note mobile-overlay-note">Full controls below the board</span>
               </div>
             )}
             {showPause && (
               <div className="game-overlay">
-                <span className="eyebrow">Take a breath</span>
-                <h2>Paused</h2>
+                <span className="eyebrow">Intermission</span>
+                <h2>Run paused.</h2>
                 <button className="primary-button" type="button" onClick={() => engine.pause()}>
-                  Keep playing <span>→</span>
+                  Resume <span>→</span>
                 </button>
-                <button className="text-button" type="button" onClick={restartGame}>Restart run</button>
+                <button className="text-button" type="button" onClick={restartGame}>Start over</button>
               </div>
             )}
             {game.status === 'gameOver' && (
               <div className="game-overlay">
-                <span className="eyebrow">Run complete</span>
-                <h2>Nice stack.</h2>
+                <span className="eyebrow">Top out</span>
+                <h2>Board full.</h2>
                 <div className="final-score">
                   <span>Score</span>
                   <strong>{formatScore(game.score)}</strong>
@@ -405,7 +590,7 @@ export function App() {
             <div className="hud-card next-card">
               <span className="hud-label">Up next</span>
               <div className="next-list">
-                {game.queue.slice(0, 3).map((type, index) => (
+                {game.queue.slice(0, 1).map((type, index) => (
                   <PreviewPiece key={`${type}-${index}`} type={type} label={`Next piece ${index + 1}`} />
                 ))}
               </div>
@@ -414,22 +599,38 @@ export function App() {
         </section>
 
         <section className="touch-controls" aria-label="Touch controls">
-          <div className="touch-cluster">
-            <TouchButton label="Move left" action="moveLeft" onAction={performAction} repeat>←</TouchButton>
-            <TouchButton label="Soft drop" action="softDrop" onAction={performAction} repeat>↓</TouchButton>
-            <TouchButton label="Move right" action="moveRight" onAction={performAction} repeat>→</TouchButton>
+          <div className="touch-cluster movement-cluster">
+            <span className="touch-cluster-label">Move</span>
+            <TouchButton label="Move left" action="moveLeft" onAction={performAction} repeat>
+              <span aria-hidden="true">←</span><small>Left</small>
+            </TouchButton>
+            <TouchButton label="Soft drop" action="softDrop" onAction={performAction} repeat>
+              <span aria-hidden="true">↓</span><small>Down</small>
+            </TouchButton>
+            <TouchButton label="Move right" action="moveRight" onAction={performAction} repeat>
+              <span aria-hidden="true">→</span><small>Right</small>
+            </TouchButton>
           </div>
-          <div className="touch-cluster">
-            <TouchButton label="Hold piece" action="hold" onAction={performAction} className="touch-small">H</TouchButton>
-            <TouchButton label="Rotate counter-clockwise" action="rotateCCW" onAction={performAction}>↶</TouchButton>
-            <TouchButton label="Rotate clockwise" action="rotateCW" onAction={performAction}>↷</TouchButton>
-            <TouchButton label="Hard drop" action="hardDrop" onAction={performAction} className="touch-accent">⇣</TouchButton>
+          <div className="touch-cluster action-cluster">
+            <span className="touch-cluster-label">Actions</span>
+            <TouchButton label="Hold piece" action="hold" onAction={performAction} className="touch-small">
+              <span aria-hidden="true">H</span><small>Hold</small>
+            </TouchButton>
+            <TouchButton label="Rotate counter-clockwise" action="rotateCCW" onAction={performAction}>
+              <span aria-hidden="true">↶</span><small>Left spin</small>
+            </TouchButton>
+            <TouchButton label="Rotate clockwise" action="rotateCW" onAction={performAction}>
+              <span aria-hidden="true">↷</span><small>Right spin</small>
+            </TouchButton>
+            <TouchButton label="Hard drop" action="hardDrop" onAction={performAction} className="touch-accent">
+              <span aria-hidden="true">⇣</span><small>Drop</small>
+            </TouchButton>
           </div>
         </section>
       </main>
 
       <footer className="footer">
-        <span>Seven shapes. Endless possibilities.</span>
+        <span>Seven pieces. One board. No excuses.</span>
         <span>v1.0</span>
       </footer>
 
@@ -441,21 +642,43 @@ export function App() {
             <button className="modal-close" type="button" onClick={() => setPanel(null)} aria-label="Close panel">×</button>
             {panel === 'help' ? (
               <>
-                <span className="eyebrow">Move with confidence</span>
+                <span className="eyebrow">Input map</span>
                 <h2 id="modal-title">Controls</h2>
-                <div className="controls-list">
-                  <div><kbd>←</kbd><kbd>→</kbd><span>Move</span></div>
-                  <div><kbd>↓</kbd><span>Soft drop</span></div>
-                  <div><kbd>↑</kbd><kbd>Z</kbd><span>Rotate</span></div>
-                  <div><kbd>Space</kbd><span>Hard drop</span></div>
-                  <div><kbd>C</kbd><span>Hold</span></div>
-                  <div><kbd>P</kbd><span>Pause</span></div>
+                <div className="desktop-control-help">
+                  <ControlModeSwitch
+                    mode={stored.preferences.inputMode}
+                    onChange={(inputMode) => updatePreferences({ inputMode })}
+                  />
+                  {stored.preferences.inputMode === 'mouse' ? (
+                    <div className="controls-list mouse-controls-list">
+                      <div><kbd>Move</kbd><span>Aim and auto-fit</span></div>
+                      <div><kbd>Left</kbd><span>Hard drop</span></div>
+                      <div><kbd>Right</kbd><span>Hold piece</span></div>
+                      <div><kbd>P</kbd><span>Pause</span></div>
+                    </div>
+                  ) : (
+                    <div className="controls-list">
+                      <div><kbd>←</kbd><kbd>→</kbd><span>Move</span></div>
+                      <div><kbd>↓</kbd><span>Soft drop</span></div>
+                      <div><kbd>↑</kbd><kbd>Z</kbd><span>Rotate</span></div>
+                      <div><kbd>Space</kbd><span>Hard drop</span></div>
+                      <div><kbd>C</kbd><span>Hold</span></div>
+                      <div><kbd>P</kbd><span>Pause</span></div>
+                    </div>
+                  )}
                 </div>
-                <p className="modal-copy">On touch screens, tap the board to rotate, swipe sideways to move, drag down to descend, or flick up to hard drop.</p>
+                <div className="mobile-control-help controls-list">
+                  <div><kbd>← ↓ →</kbd><span>Move and descend</span></div>
+                  <div><kbd>↶ ↷</kbd><span>Rotate either way</span></div>
+                  <div><kbd>H</kbd><span>Hold piece</span></div>
+                  <div><kbd>⇣</kbd><span>Hard drop</span></div>
+                </div>
+                <p className="modal-copy desktop-control-help">Switch modes here any time. Keyboard controls stay available in mouse mode.</p>
+                <p className="modal-copy mobile-control-help">Use the full deck below the board. Taps and swipes on the board remain available as shortcuts.</p>
               </>
             ) : (
               <>
-                <span className="eyebrow">Tune your cabinet</span>
+                <span className="eyebrow">Audio rack</span>
                 <h2 id="modal-title">Sound</h2>
                 <label className="setting-row">
                   <span><strong>Music</strong><small>Original pulse loop</small></span>

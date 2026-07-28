@@ -157,6 +157,63 @@ export class GameEngine implements GameEngineApi {
     }
   }
 
+  aimAt(boardX: number, boardY: number): void {
+    const active = this.state.active;
+    if (this.state.status !== 'playing' || !active) return;
+
+    const targetX = Math.max(0, Math.min(BOARD_WIDTH - 1, boardX));
+    const targetY = Math.max(HIDDEN_ROWS, Math.min(BOARD_HEIGHT - 1, boardY));
+    let best: { piece: ActivePiece; ghostY: number; score: number } | null = null;
+
+    for (let rotationIndex = 0; rotationIndex < 4; rotationIndex += 1) {
+      const rotation = rotationIndex as Rotation;
+      const cells = getCells(active.type, rotation);
+      const minX = Math.min(...cells.map((cell) => cell.x));
+      const maxX = Math.max(...cells.map((cell) => cell.x));
+
+      for (let x = -minX; x < BOARD_WIDTH - maxX; x += 1) {
+        const candidate: ActivePiece = { ...active, rotation, x };
+        if (this.collides(candidate)) continue;
+
+        let ghostY = candidate.y;
+        while (!this.collides({ ...candidate, y: ghostY + 1 })) ghostY += 1;
+
+        const landingCells = cells.map((cell) => ({
+          x: x + cell.x,
+          y: ghostY + cell.y,
+        }));
+        const pointerDistance = Math.min(...landingCells.map((cell) => (
+          Math.pow(cell.x - targetX, 2) + Math.pow((cell.y - targetY) * 0.72, 2)
+        )));
+        const horizontalCenter = landingCells.reduce((sum, cell) => sum + cell.x, 0) / landingCells.length;
+        const horizontalDistance = Math.abs(horizontalCenter - targetX);
+        const rotationDistance = Math.min(
+          Math.abs(rotation - active.rotation),
+          4 - Math.abs(rotation - active.rotation),
+        );
+        const movementDistance = Math.abs(x - active.x);
+        const score = pointerDistance * 100
+          + horizontalDistance * 6
+          + rotationDistance * 0.35
+          + movementDistance * 0.015;
+
+        if (!best || score < best.score) best = { piece: candidate, ghostY, score };
+      }
+    }
+
+    if (!best) return;
+    const changed = best.piece.x !== active.x
+      || best.piece.rotation !== active.rotation
+      || best.ghostY !== this.state.ghostY;
+    if (!changed) return;
+
+    this.state.active = best.piece;
+    this.state.ghostY = best.ghostY;
+    this.lastMoveWasRotation = best.piece.rotation !== active.rotation;
+    this.resetGroundLock();
+    this.emit();
+  }
+
   pause(force?: boolean): void {
     if (force === true) {
       if (this.state.status === 'playing' || this.state.status === 'clearing') {

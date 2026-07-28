@@ -3,19 +3,45 @@ import { expect, test } from '@playwright/test';
 test('starts, accepts keyboard input, pauses, and restarts', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveTitle('blocks');
-  await expect(page.getByRole('heading', { name: /find your flow/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /make space/i })).toBeVisible();
   await expect(page.locator('canvas')).toBeInViewport();
+  await expect(page.locator('.next-list .preview-grid')).toHaveCount(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.getByRole('button', { name: /play blocks/i }).click();
+  await page.getByRole('button', { name: /start game/i }).click();
   await expect(page.locator('canvas')).toBeVisible();
 
   await page.keyboard.press('Space');
   await expect(page.getByText(/\+\d+ hard drop/i)).toBeVisible();
 
   await page.keyboard.press('p');
-  await expect(page.getByRole('heading', { name: 'Paused' })).toBeVisible();
-  await page.getByRole('button', { name: /keep playing/i }).click();
-  await expect(page.getByRole('heading', { name: 'Paused' })).toBeHidden();
+  await expect(page.getByRole('heading', { name: /run paused/i })).toBeVisible();
+  await page.getByRole('button', { name: /resume/i }).click();
+  await expect(page.getByRole('heading', { name: /run paused/i })).toBeHidden();
+});
+
+test('supports smart mouse aiming, dropping, holding, and persistence', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'Desktop mouse-mode assertion');
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Mouse', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Mouse', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: /start game/i }).click();
+
+  const board = page.locator('canvas');
+  const bounds = await board.boundingBox();
+  expect(bounds).not.toBeNull();
+  await page.mouse.move(bounds!.x + bounds!.width * 0.82, bounds!.y + bounds!.height * 0.88);
+  await page.mouse.click(bounds!.x + bounds!.width * 0.82, bounds!.y + bounds!.height * 0.88);
+  await expect(page.getByText(/\+\d+ hard drop/i)).toBeVisible();
+
+  await page.mouse.click(
+    bounds!.x + bounds!.width * 0.28,
+    bounds!.y + bounds!.height * 0.72,
+    { button: 'right' },
+  );
+  await expect(page.locator('[aria-label^="Held piece:"]:not([aria-label$="empty"])')).toHaveCount(1);
+
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Mouse', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('opens help and sound settings', async ({ page }) => {
@@ -33,11 +59,14 @@ test('shows usable touch controls on a mobile viewport', async ({ page }, testIn
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Move left' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Hard drop' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Hold piece' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Rotate counter-clockwise' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Rotate clockwise' })).toBeVisible();
   const touchSize = await page.getByRole('button', { name: 'Hard drop' }).boundingBox();
-  expect(touchSize?.width).toBeGreaterThanOrEqual(38);
-  expect(touchSize?.height).toBeGreaterThanOrEqual(38);
+  expect(touchSize?.width).toBeGreaterThanOrEqual(44);
+  expect(touchSize?.height).toBeGreaterThanOrEqual(44);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.getByRole('button', { name: /play blocks/i }).click();
+  await page.getByRole('button', { name: /start game/i }).click();
   await page.getByRole('button', { name: 'Hard drop' }).click();
   await expect(page.locator('canvas')).toBeInViewport();
 });
